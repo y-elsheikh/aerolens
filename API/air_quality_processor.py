@@ -45,7 +45,7 @@ TEMPO_COLUMN_MAP = {
 # --- TEMPO Data Functions ---
 LOCAL_FILE_MAP = {
     "NO2": "tropomi.nrti.no2.nitrogendioxide_tropospheric_column_2025-10-01T110000Z_2025-10-03T110000Z.csv",
-    "HCHO": "tropomi.nrti.hcho.formaldehyde_tropospheric_vertical_column_2025-10-01T100000Z_2025-10-03T100000Z.csv",
+    "HCHO": "tropomi.nrti.hcho.formaldehyde_tropospheric_vertical_column_2025-10-02T000000Z_2025-10-02T235959Z.csv",
     "O3": "modis.mod7.Total_Ozone_2025-10-02T000000Z_2025-10-02T235959Z.csv"
 }
 
