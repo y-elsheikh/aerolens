@@ -1,4 +1,4 @@
-# main.py
+#main.py
 
 from fastapi import FastAPI, HTTPException, Query
 # CRITICAL: Import CORS Middleware
@@ -17,6 +17,7 @@ from air_quality_processor import (
     correlate_tempo_airnow,
     interpolate_heatmap,
     get_cities_in_bbox,
+    get_spatially_averaged_timeseries, # Import the new function
     TEMPO_VARIABLE_MAP,
     TEMPO_COLUMN_MAP,
     get_airnow_variables
@@ -80,6 +81,46 @@ class CityData(BaseModel):
 @app.get("/")
 async def read_root():
     return {"message": "Welcome to the Air Quality Data API. CORS is enabled."}
+
+
+@app.post("/spatially_averaged_timeseries", response_model=List[AveragedDataPoint])
+async def get_spatially_averaged_timeseries_data(
+    bbox: BoundingBox,
+    day: str = Query(..., description="The day for the timeseries, e.g., '2025-10-02'"),
+    product: str = Query(..., description="The data product, e.g., 'AirQuality.airnow.ozone'")
+):
+    """
+    Generates a spatially averaged time series for a given day, bounding box, and product.
+    This is ideal for plotting time series graphs.
+    """
+    try:
+        timeseries = get_spatially_averaged_timeseries(
+            day=day,
+            bbox=bbox.to_tuple(),
+            product=product
+        )
+
+        if timeseries is None or timeseries.empty:
+            raise HTTPException(
+                status_code=404,
+                detail=f"No time series data found for product '{product}' on {day} in the specified bounding box."
+            )
+
+        # Format the response into a list of data points, excluding any NaN values
+        response_data = [
+            AveragedDataPoint(time=index.to_pydatetime(), value=float(value))
+            for index, value in timeseries.items() if pd.notna(value)
+        ]
+        
+        return response_data
+
+    except KeyError as e:
+        raise HTTPException(status_code=400, detail=f"Data processing error: {e}")
+    except Exception as e:
+        # Log the error for debugging purposes
+        print(f"Server error in /spatially_averaged_timeseries: {e}")
+        raise HTTPException(status_code=500, detail=f"An internal error occurred: {e}")
+
 
 @app.post("/heatmap_data", response_model=InterpolatedHeatmapResponse)
 async def get_interpolated_heatmap_data(
@@ -162,5 +203,3 @@ async def get_aqi_value(
     if aqi is None:
         raise HTTPException(status_code=400, detail=category)
     return AQIResult(aqi=aqi, category=category)
-
-# ... (Include other endpoints like /correlation, /cities_in_bbox if needed) ...

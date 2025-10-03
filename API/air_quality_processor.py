@@ -55,6 +55,66 @@ TEMPO_COLUMN_MAP = {
     "HCHO": "formaldehyde_tropospheric_vertical_column(molecules/cm2)"
 }
 
+
+def get_spatially_averaged_timeseries(day: str, bbox: Tuple[float, float, float, float], product: str) -> Optional[pd.Series]:
+    """
+    Fetches and creates a spatially averaged time series for a given day, bbox, and product.
+
+    Args:
+        day (str): The day for the query (e.g., '2025-10-02').
+        bbox (Tuple[float, float, float, float]): The bounding box for the spatial query.
+        product (str): The product to query (e.g., 'AirQuality.airnow.no2').
+
+    Returns:
+        Optional[pd.Series]: A pandas Series with the time series data, or None if no data is found.
+    """
+    start_date = f"2025-09-29 00:00:00"
+    end_date = f"2025-10-01 23:59:59"
+
+    try:
+        rsig_api = pyrsig.RsigApi(bdate=start_date, edate=end_date, bbox=bbox, overwrite=True)
+        
+        # Define the column name based on the product
+        if product == 'NO2':
+            product = "tropomi.nrti.no2.nitrogendioxide_tropospheric_column"
+            column_name = 'nitrogendioxide_tropospheric_column(molecules/cm2)',
+        elif product == 'O3':
+            product = "modis.mod7.Total_Ozone"
+            column_name = 'Total_Ozone(Dobson)'
+        elif product == 'HCHO':
+            product = "tropomi.nrti.hcho.formaldehyde_tropospheric_vertical_column"
+            column_name = 'formaldehyde_tropospheric_vertical_column(molecules/cm2)'
+        else:
+            # Fallback for other potential products
+            # This might need adjustment if other products are used
+            column_name = product.split('.')[-1]
+        
+        df = rsig_api.to_dataframe(product, parse_dates=True, unit_keys=True)
+        print(df.columns)
+        if df.empty:
+            return None
+
+        # Ensure the time column is in datetime format
+        if 'Timestamp(UTC)' in df.columns:
+            df['time'] = pd.to_datetime(df['Timestamp(UTC)'], utc=True)
+            df.set_index('time', inplace=True)
+        
+        # Spatially average the data by resampling time
+        # The mean will be calculated for all data points within each time interval
+        if True:
+            print("yay!!!!!")
+            print(df.columns[3])
+            # Resample to a regular interval (e.g., 1 hour) and take the mean
+            return df[df.columns[3]].resample("1min").mean()
+        else:
+            raise KeyError(f"Column '{column_name}' not found in the dataframe for product '{product}'.")
+
+    except Exception as e:
+        # In a real application, you might want to log this error
+        print(f"An error occurred while fetching spatially averaged data: {e}")
+        return None
+
+
 def _load_species_df(species: str) -> pd.DataFrame:
     """
     Internal helper to load the CSV for a given species.
