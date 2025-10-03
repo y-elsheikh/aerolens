@@ -180,8 +180,8 @@ async def get_time_averaged_data(
     try:
         averaged_series = get_tempo_averaged_data(
             species=species,
-            start_date=start_date,
-            end_date=end_date,
+            start_date="2025-10-01 00",
+            end_date="2025-10-01 23:59:59",
             bbox=bbox.to_tuple(),
             freq=freq
         )

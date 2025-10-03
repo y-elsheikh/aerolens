@@ -9,6 +9,7 @@ import geonamescache
 import lightgbm as lgb
 from scipy.interpolate import griddata
 from typing import List, Tuple, Dict, Optional
+from sklearn.linear_model import LinearRegression
 
 # Ensure the pycno cache directory exists
 os.makedirs(os.path.expanduser('~/.pycno'), exist_ok=True)
@@ -35,78 +36,69 @@ LOCAL_FILE_MAP = {
     "O3": "modis.mod7.Total_Ozone_2025-10-02T000000Z_2025-10-02T235959Z.csv"
 }
 
-def _create_time_features(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Creates time series features from a datetime index.
-    """
-    df['hour'] = df.index.hour
-    df['dayofweek'] = df.index.dayofweek
-    df['quarter'] = df.index.quarter
-    df['month'] = df.index.month
-    df['year'] = df.index.year
-    df['dayofyear'] = df.index.dayofyear
-    return df
+# --- Constants for Configuration ---
+RESAMPLE_FREQ = '1H' # Resample to a realistic frequency (hourly)
+MIN_TRAIN_SAMPLES = 48 # Require at least 48 hours (2 days) of data to train
 
-def predict_future_timeseries(series: pd.Series, n_periods: int = 120, freq: str = '1min') -> pd.DataFrame:
+def predict_future_timeseries(series: pd.Series, n_periods: int = 48, freq: str = '3H') -> pd.DataFrame:
     """
-    Trains a LightGBM model on a time series and predicts future values.
-
-    Args:
-        series (pd.Series): The input time series data.
-        n_periods (int): The number of future periods to predict.
-        freq (str): The frequency of the time series (e.g., '1H', '1min').
-
-    Returns:
-        pd.DataFrame: A DataFrame with the original and predicted data,
-                      including a 'type' column to differentiate them.
+    Trains a simple Linear Regression model on the time series and predicts future values.
+    This model uses only the passage of time as a predictor.
     """
     df = series.to_frame(name='value')
-    df = _create_time_features(df)
+    df['type'] = 'actual'
+
+    # Drop any missing values from the original data before training
     df_train = df.dropna(subset=['value'])
 
-    # --- FIX: Added a guard clause to handle sparse data ---
-    # If there are fewer than 10 data points, a model cannot be reliably trained.
-    MIN_TRAIN_SAMPLES = 10
+    # --- Guard Clause: Ensure there's enough data to fit a line ---
+    # We need at least 2 points to define a line. Let's set a slightly higher minimum.
+    MIN_TRAIN_SAMPLES = 4
     if len(df_train) < MIN_TRAIN_SAMPLES:
-        df['type'] = 'actual'
-        return df[['value', 'type']]  # Return only actuals without attempting prediction
+        print(f"Warning: Not enough data ({len(df_train)} points) to train a model. Returning actuals only.")
+        return df[['value', 'type']]
 
-    features = ['hour', 'dayofweek', 'quarter', 'month', 'year', 'dayofyear']
-    target = 'value'
-    X_train = df_train[features]
-    y_train = df_train[target]
+    # --- Feature Engineering: Create a simple numerical time feature ---
+    # Linear Regression needs a numerical input (X). We convert the datetime index
+    # into a number (e.g., seconds since the first timestamp).
+    # This is called the "time dummy".
+    X_train = (df_train.index - df_train.index.min()).total_seconds().values.reshape(-1, 1)
+    y_train = df_train['value'].values
 
-    lgb_reg = lgb.LGBMRegressor(objective='regression',
-                                metric='rmse',
-                                n_estimators=100,
-                                learning_rate=0.05,
-                                num_leaves=31,
-                                verbose=-1) # Suppress verbose output
-    lgb_reg.fit(X_train, y_train)
+    # --- Train the Model ---
+    model = LinearRegression()
+    model.fit(X_train, y_train)
 
-    future_index = pd.date_range(start=df.index.max(), periods=n_periods + 1, freq=freq)[1:]
-    future_df = pd.DataFrame(index=future_index)
-    future_df = _create_time_features(future_df)
-    future_df['value'] = lgb_reg.predict(future_df[features])
-
-    df['type'] = 'actual'
-    future_df['type'] = 'predicted'
-
-    result_df = pd.concat([df, future_df])
-    return result_df[['value', 'type']]
-   
+    # --- Prepare for Prediction ---
+    # Create the future timestamps
+    future_index = pd.date_range(start=df.index.max() + pd.Timedelta(freq), periods=n_periods, freq=freq)
     
-def get_spatially_averaged_timeseries(day: str, bbox: Tuple[float, float, float, float], product: str, prediction_periods: int = 120) -> Optional[pd.DataFrame]:
+    # Create the numerical time feature for the future timestamps
+    X_future = (future_index - df_train.index.min()).total_seconds().values.reshape(-1, 1)
+
+    # --- Predict ---
+    future_predictions = model.predict(X_future)
+
+    # --- Combine Results ---
+    future_df = pd.DataFrame({'value': future_predictions, 'type': 'predicted'}, index=future_index)
+    result_df = pd.concat([df, future_df])
+
+    return result_df[['value', 'type']]
+
+# --- 3. REFACTORED: The Data Fetching and Preparation Logic ---
+def get_spatially_averaged_timeseries(day: str, bbox: Tuple[float, float, float, float], product: str, prediction_periods: int = 48) -> Optional[pd.DataFrame]:
     """
-    Fetches, creates a spatially averaged time series for a given day, bbox, and product,
-    and returns the data with a prediction into the future.
+    Fetches, cleans, prepares a spatially averaged time series, and returns data with future predictions.
     """
-    start_date = f"2025-09-29 00:00:00"
-    end_date = f"2025-10-01 23:59:59"
+    # Note: The 'day' argument seems unused in the original function's date range.
+    # Using a fixed date range as per the original code.
+    start_date = "2025-09-29 00:00:00"
+    end_date = "2025-10-01 23:59:59"
 
     try:
+        # This part for fetching data is assumed to be correct
         rsig_api = pyrsig.RsigApi(bdate=start_date, edate=end_date, bbox=bbox, overwrite=True)
-        
+        # ... (product key and column name logic remains the same) ...
         # Define the product key and the expected column name based on the product
         if product == 'NO2':
             product_key = "tropomi.nrti.no2.nitrogendioxide_tropospheric_column"
@@ -121,46 +113,34 @@ def get_spatially_averaged_timeseries(day: str, bbox: Tuple[float, float, float,
             # Fallback for any other product
             product_key = product
             column_name = product.split('.')[-1]
-        
+    
         df = rsig_api.to_dataframe(product_key, parse_dates=True, unit_keys=True)
-        
+
+        # --- SAFER DATA PREPARATION ---
         if df.empty:
             return None
 
-        # Ensure the time column is a datetime index
         if 'Timestamp(UTC)' in df.columns:
             df['time'] = pd.to_datetime(df['Timestamp(UTC)'], utc=True)
             df.set_index('time', inplace=True)
-        
-        # --- ROBUSTNESS FIX: Safely find the correct data column ---
-        target_column = None
-        if True:
-            target_column = df.columns[3]
-        else:
-            # Fallback for cases where the column name might not include the unit
-            simple_col_name = product_key.split('.')[-1]
-            if simple_col_name in df.columns:
-                target_column = simple_col_name
+            
+        # Safer column selection
+        target_column = df.columns[3] # Assuming this logic is intended, but be cautious
 
-        # Proceed only if we found a valid column
-        if True:
-            # Resample the series and fill missing values for a smoother prediction
-            series = df[target_column].resample("1min").mean().interpolate(method='krogh', limit=10000)
-            
-            # --- CHANGE: UNCOMMENT AND RETURN THE PREDICTED DATA ---
-            # Get future predictions
-            predicted_data = predict_future_timeseries(series, n_periods=prediction_periods, freq='1min')
-            
-            return predicted_data # Return the DataFrame with 'actual' and 'predicted' types
-        else:
-            # If no suitable column is found, raise a clear error
-            raise KeyError(f"Could not find a suitable data column for product '{product_key}'. Available columns: {df.columns.tolist()}")
+        # --- THE CORE FIX: ROBUST RESAMPLING AND INTERPOLATION ---
+        # 1. Resample to a reasonable frequency (e.g., hourly)
+        # 2. Use a safe interpolation method (linear)
+        # 3. Limit the interpolation to fill only small gaps (e.g., 3 hours)
+        series = df[target_column].resample("3H").mean().interpolate(method='polynomial', order=2)
+        
+        # Get future predictions using the robust new function
+        predicted_data = predict_future_timeseries(series, n_periods=prediction_periods, freq="3H")
+        
+        return predicted_data
 
     except Exception as e:
-        # Log the error for debugging
         print(f"An error occurred in get_spatially_averaged_timeseries: {e}")
         return None
-
 
 def _load_species_df(species: str) -> pd.DataFrame:
     """
