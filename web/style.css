@@ -1,0 +1,250 @@
+<<<<<<< HEAD
+/* Color Palette Variables */
+:root {
+    --color-gold: #D4AF37; /* A classic gold */
+    --color-dark-grey: #36454F; /* Charcoal Grey */
+    --color-medium-grey: #6C757D; /* A softer grey */
+    --color-light-beige: #F5F5DC; /* A subtle beige */
+    --color-white: #FFFFFF;
+    --color-off-white: #F8F9FA; /* Slightly off-white for backgrounds */
+}
+
+body {
+    margin: 0;
+    font-family: 'Montserrat', sans-serif; /* Using the Google Font */
+    display: flex;
+    height: 100vh;
+    overflow: hidden;
+    transition: all 0.3s ease-in-out;
+    background-color: var(--color-off-white); /* Overall background */
+    color: var(--color-dark-grey);
+}
+
+#sidebar {
+    width: 280px; /* Slightly wider sidebar */
+    background-color: var(--color-dark-grey); /* Dark grey sidebar background */
+    color: var(--color-off-white); /* Light text on dark background */
+    padding: 25px; /* Increased padding */
+    box-sizing: border-box;
+    transition: transform 0.3s ease-in-out, width 0.3s ease-in-out, padding 0.3s ease-in-out;
+    transform: translateX(0);
+    flex-shrink: 0;
+    box-shadow: 2px 0 5px rgba(0,0,0,0.2); /* Subtle shadow */
+}
+
+#sidebar.hidden {
+    transform: translateX(-100%);
+    width: 0;
+    padding: 0;
+}
+
+.sidebar-header {
+    display: flex;
+    align-items: center;
+    margin-bottom: 30px; /* More space below header */
+    white-space: nowrap;
+    overflow: hidden;
+    border-bottom: 1px solid rgba(255,255,255,0.1); /* Subtle separator */
+    padding-bottom: 15px;
+}
+
+.sidebar-header h2 {
+    margin: 0;
+    font-weight: 600; /* Bolder font for header */
+    color: var(--color-gold); /* Gold accent for header */
+    font-size: 1.6em;
+}
+
+#sidebar.hidden .sidebar-header h2,
+#sidebar.hidden .sidebar-nav {
+    display: none;
+}
+
+.hamburger-menu {
+    background: none;
+    border: none;
+    color: var(--color-gold); /* Gold hamburger icon */
+    font-size: 28px; /* Larger icon */
+    cursor: pointer;
+    margin-right: 20px; /* More space */
+    padding: 5px;
+    border-radius: 5px;
+    transition: background-color 0.2s ease;
+}
+
+.hamburger-menu:hover {
+    background-color: rgba(255,255,255,0.1);
+}
+
+.sidebar-nav {
+    list-style: none;
+    padding: 0;
+}
+
+.sidebar-nav li {
+    margin-bottom: 12px; /* More spacing between items */
+}
+
+.sidebar-nav a {
+    color: var(--color-off-white);
+    text-decoration: none;
+    font-size: 1.1em; /* Slightly larger font */
+    display: block;
+    padding: 12px 15px; /* Increased padding */
+    border-radius: 8px; /* More rounded corners */
+    transition: background-color 0.2s ease, color 0.2s ease;
+    font-weight: 400;
+}
+
+.sidebar-nav a:hover {
+    background-color: var(--color-medium-grey); /* Medium grey on hover */
+    color: var(--color-white);
+}
+
+.sidebar-nav a.active {
+    background-color: var(--color-gold); /* Gold for active link */
+    color: var(--color-dark-grey); /* Dark text on gold */
+    font-weight: 600; /* Bolder active link */
+}
+
+#content {
+    flex-grow: 1;
+    position: relative;
+    overflow: hidden;
+    transition: margin-left 0.3s ease-in-out;
+    background-color: var(--color-off-white); /* Content background */
+}
+
+.page {
+    width: 100%;
+    height: 100%;
+    position: absolute;
+    top: 0;
+    left: 0;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s ease-in-out, visibility 0.3s ease-in-out;
+    padding: 20px; /* Add some padding to pages */
+    box-sizing: border-box;
+}
+
+.page.active {
+    opacity: 1;
+    visibility: visible;
+}
+
+#mapid {
+    height: 100%;
+    width: 100%;
+    border-radius: 8px; /* Slightly rounded map corners */
+    overflow: hidden; /* Ensures map tiles respect border-radius */
+    box-shadow: 0 4px 10px rgba(0,0,0,0.1); /* Subtle shadow for the map */
+}
+
+/* Dashboard specific styling */
+#dashboard-view {
+    background-color: var(--color-light-beige); /* Beige background for dashboard */
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    border-radius: 8px;
+    margin: 20px; /* Margin around the dashboard content */
+    box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+}
+
+#dashboard-view h1 {
+    color: var(--color-gold); /* Gold heading */
+    font-size: 2.5em;
+    margin-bottom: 15px;
+    font-weight: 600;
+}
+
+#dashboard-view p {
+    color: var(--color-medium-grey); /* Medium grey text */
+    font-size: 1.2em;
+    max-width: 600px;
+    line-height: 1.6;
+}
+=======
+/* Dark theme vars */
+:root {
+  --bg-primary: #111827;
+  --bg-secondary: #1f2937;
+  --text-high: #f9fafb;
+  --color-indigo: #818cf8;
+  --color-success: #34d399;
+  --color-warning: #facc15;
+  --color-danger: #f87171;
+}
+
+body {
+  font-family: 'Inter', sans-serif;
+  background-color: var(--bg-primary);
+  color: var(--text-high);
+}
+
+/* Map container */
+#mapid {
+  height: 90%;
+  width: 100%;
+  border-radius: 0.75rem;
+  overflow: hidden;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5),
+              0 4px 6px -2px rgba(0, 0, 0, 0.05);
+}
+
+/* Leaflet popups dark */
+.leaflet-popup-content-wrapper,
+.leaflet-popup-tip {
+  background: var(--bg-secondary) !important;
+  color: var(--text-high) !important;
+  box-shadow: 0 6px 10px rgba(0,0,0,0.4);
+}
+
+/* Ensure search bar text is black */
+.leaflet-control input[type="text"] {
+  color: #000 !important;        /* text color */
+  background-color: #fff !important; /* keep background white */
+}
+
+.leaflet-control input::placeholder {
+  color: #555 !important;        /* darker gray placeholder */
+}
+
+
+/* utility height */
+.h-screen-minus-nav {
+  height: calc(100vh - 64px);
+}
+
+/* responsive sidebar animation */
+#sidebar.is-open { transform: translateX(0); }
+
+@media (max-width: 768px) {
+  #sidebar {
+    transform: translateX(-100%);
+    position: fixed;
+    height: 100vh;
+    top: 0;
+    left: 0;
+  }
+}
+
+/* sidebar link default + active states (for non-Tailwind utilities) */
+.sidebar-nav a {
+  color: #9ca3af; /* text-gray-400 */
+  background: transparent;
+}
+.sidebar-nav a.active,
+.sidebar-nav a[aria-current="page"],
+.sidebar-nav a:hover.active {
+  background: rgba(67,56,202,0.5); /* indigo-700/50 */
+  color: #fff;
+}
+.sidebar-nav a:hover {
+  background: #374151; /* gray-700 */
+  color: #fff;
+}
+>>>>>>> 9ff9d39c603520c314c455411ffba6cf958afdf2

@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AeroLens: TEMPO Predictive Dashboard</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Load Lucide Icons for a clean look -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Inter Font -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <!-- Leaflet CSS for Map functionality -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css"/>
+    
+    <style>
+        /* Custom styles for dark theme and Leaflet integration */
+        :root {
+            /* Custom Colors for the Fire/Dark Theme */
+            --bg-primary: #111827; /* Dark Grey/Black */
+            --bg-secondary: #1f2937; /* Slightly Lighter Dark Grey */
+            --text-high: #f9fafb; /* Off-White Text */
+            --color-indigo: #818cf8; /* Primary Highlight Color */
+            --color-success: #34d399; /* Green for good status */
+            --color-warning: #facc15; /* Yellow for moderate status */
+            --color-danger: #f87171; /* Red for poor status */
+        }
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-primary);
+            color: var(--text-high);
+        }
+
+        /* Map Container Styling */
+        #mapid {
+            height: 100%;
+            width: 100%;
+            border-radius: 0.75rem; /* Large rounded corners */
+            overflow: hidden;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+
+        /* Ensure Leaflet popups are dark-theme compliant */
+        .leaflet-popup-content-wrapper, .leaflet-popup-tip {
+            background: var(--bg-secondary) !important;
+            color: var(--text-high) !important;
+            box-shadow: 0 6px 10px rgba(0,0,0,0.4);
+        }
+        
+        /* Utility to ensure full height */
+        .h-screen-minus-nav {
+            height: calc(100vh - 64px); /* Assuming 64px tall nav/header */
+        }
+
+        /* Responsive Sidebar Animation */
+        #sidebar.is-open {
+            transform: translateX(0);
+        }
+        
+        @media (max-width: 768px) {
+            #sidebar {
+                transform: translateX(-100%);
+                position: fixed;
+                height: 100vh;
+                top: 0;
+                left: 0;
+            }
+        }
+    </style>
+</head>
+<body class="min-h-screen flex antialiased">
+
+    <!-- Sidebar / Navigation (Tailwind Classes Applied) -->
+    <div id="sidebar" class="bg-gray-800 text-white w-64 space-y-6 py-7 px-4 absolute inset-y-0 left-0 transform transition duration-300 ease-in-out z-50 md:relative md:translate-x-0 shadow-xl rounded-r-xl">
+        
+        <!-- Header -->
+        <div class="flex items-center justify-between">
+            <h2 class="text-2xl font-extrabold tracking-wider text-indigo-400">AeroLens</h2>
+            <button id="hamburger-icon" class="md:hidden text-gray-400 hover:text-white focus:outline-none">
+                <i data-lucide="x" class="w-6 h-6"></i>
+            </button>
+        </div>
+
+        <!-- Navigation Links -->
+        <nav>
+            <ul class="space-y-2">
+                <li>
+                    <a href="#" id="map-link" class="flex items-center p-3 font-semibold text-gray-300 bg-indigo-700/50 rounded-lg hover:bg-indigo-600 transition duration-150 active-link">
+                        <i data-lucide="map" class="w-5 h-5 mr-3"></i>
+                        Map View
+                    </a>
+                </li>
+                <li>
+                    <a href="#" id="dashboard-link" class="flex items-center p-3 font-semibold text-gray-400 rounded-lg hover:bg-gray-700 hover:text-white transition duration-150">
+                        <i data-lucide="layout-dashboard" class="w-5 h-5 mr-3"></i>
+                        Dashboard
+                    </a>
+                </li>
+                <li>
+                    <a href="#" class="flex items-center p-3 font-semibold text-gray-400 rounded-lg hover:bg-gray-700 hover:text-white transition duration-150">
+                        <i data-lucide="settings" class="w-5 h-5 mr-3"></i>
+                        Settings
+                    </a>
+                </li>
+            </ul>
+        </nav>
+        
+        <!-- Footer Info -->
+        <div class="mt-auto pt-8 border-t border-gray-700">
+             
+        </div>
+    </div>
+
+    <!-- Main Content Area -->
+    <div id="content" class="flex-1 overflow-y-auto p-4 md:p-8 relative">
+
+        <!-- Mobile Menu Toggle Button -->
+        <button id="show-sidebar-btn" class="md:hidden fixed top-4 left-4 z-40 p-2 bg-indigo-600 rounded-full shadow-lg text-white">
+            <i data-lucide="menu" class="w-6 h-6"></i>
+        </button>
+        
+        <!-- Map View Page -->
+        <div id="map-view" class="page active h-screen-minus-nav">
+            <div class="mb-6 p-4 bg-gray-800 rounded-xl shadow-lg flex justify-between items-center">
+                <h1 class="text-3xl font-bold text-indigo-300">North America TEMPO Map</h1>
+                <span class="text-sm font-medium text-gray-400 flex items-center">
+                    <i data-lucide="gauge" class="w-4 h-4 mr-1 text-red-400"></i>
+                    Forecast Horizon: 48 Hours
+                </span>
+            </div>
+            
+            <div id="mapid" class="h-[85vh] w-full"></div>
+        </div>
+
+        <!-- Dashboard View Page -->
+        <div id="dashboard-view" class="page hidden p-4">
+            <h1 class="text-3xl font-bold text-indigo-300 mb-6">Predictive Model Dashboard</h1>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                <!-- Card 1: Model Status -->
+                <div class="bg-gray-800 p-6 rounded-xl shadow-2xl border border-indigo-700/30">
+                    <div class="flex items-center justify-between">
+                        <h3 class="text-lg font-semibold text-gray-300">AI Model Health</h3>
+                        <div class="text-green-400 flex items-center">
+                            <i data-lucide="check-circle" class="w-5 h-5 mr-1"></i>
+                            Operational
+                        </div>
+                    </div>
+                    <p class="text-4xl font-extrabold text-white mt-4">97.2%</p>
+                    <p class="text-sm text-gray-500 mt-1">PM2.5 RMSE Accuracy</p>
+                </div>
+
+                <!-- Card 2: Current AQI -->
+                <div class="bg-gray-800 p-6 rounded-xl shadow-2xl border border-indigo-700/30">
+                    <h3 class="text-lg font-semibold text-gray-300">Global Average AQI</h3>
+                    <div class="flex items-end mt-4">
+                        <p class="text-4xl font-extrabold text-green-400">45</p>
+                        <span class="text-lg font-medium text-green-500 ml-2 mb-1">GOOD</span>
+                    </div>
+                    <p class="text-sm text-gray-500 mt-1">Based on hourly TEMPO and AQS fusion data.</p>
+                </div>
+
+                <!-- Card 3: Last Update -->
+                <div class="bg-gray-800 p-6 rounded-xl shadow-2xl border border-indigo-700/30">
+                    <h3 class="text-lg font-semibold text-gray-300">Last Data Run</h3>
+                    <p class="text-4xl font-extrabold text-indigo-400 mt-4">12:15 PM PDT</p>
+                    <p class="text-sm text-gray-500 mt-1">Data Ingestion Time: 3 minutes ago.</p>
+                </div>
+            </div>
+
+            <!-- Detailed Panel -->
+            <div class="bg-gray-800 p-6 rounded-xl shadow-2xl border border-indigo-700/30 w-full">
+                <h3 class="text-xl font-bold text-indigo-400 mb-4">Hyper-Local Forecast Lookup</h3>
+                <div class="flex gap-4">
+                    <input type="text" id="city-input" placeholder="Enter City or Zip Code (e.g., Los Angeles)" class="flex-1 p-3 rounded-lg bg-gray-700 border border-gray-600 text-white placeholder-gray-400 focus:ring-indigo-500 focus:border-indigo-500">
+                    <button onclick="checkForecast()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-lg transition duration-200 shadow-md">
+                        Get Forecast
+                    </button>
+                </div>
+                <div id="forecast-output" class="mt-4 p-3 bg-gray-700 rounded-lg text-gray-300 border border-gray-600">
+                    <p>Enter a location above to see its 48-hour predicted air quality using the hybrid model.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+
+    <script>
+        // Initialize Lucide icons
+        lucide.createIcons();
+
+        // --- Core Application State & Elements ---
+        const sidebar = document.getElementById('sidebar');
+        const hamburgerIcon = document.getElementById('hamburger-icon');
+        const showSidebarBtn = document.getElementById('show-sidebar-btn');
+        const mapLink = document.getElementById('map-link');
+        const dashboardLink = document.getElementById('dashboard-link');
+        const mapView = document.getElementById('map-view');
+        const dashboardView = document.getElementById('dashboard-view');
+
+        let map; // Global map instance
+
+        // --- Utility Functions ---
+
+        function toggleSidebar() {
+            // Use 'is-open' class for visual state
+            sidebar.classList.toggle('is-open'); 
+
+            // Handle mobile overlay/visibility
+            if (window.innerWidth <= 768) {
+                if (sidebar.classList.contains('is-open')) {
+                    sidebar.style.transform = 'translateX(0)';
+                    showSidebarBtn.style.display = 'none';
+                } else {
+                    sidebar.style.transform = 'translateX(-100%)';
+                    showSidebarBtn.style.display = 'block';
+                }
+            }
+            
+            // Critical: Invalidate map size when container changes
+            if (map && mapView.classList.contains('active')) {
+                setTimeout(() => {
+                    map.invalidateSize();
+                }, 300); 
+            }
+        }
+        
+        function initMap() {
+            // Only create the map if it doesn't exist
+            if (!map) {
+                map = L.map('mapid', { zoomControl: false }).setView([40, -100], 3); // Centered on North America
+                L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+                    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+                    subdomains: 'abcd',
+                    maxZoom: 19
+                }).addTo(map);
+                
+                // Add a placeholder marker for demonstration
+                L.marker([34.05, -118.24]).addTo(map)
+                    .bindPopup('<div class="font-bold text-lg text-red-400">Los Angeles Forecast</div>AQI: <span class="text-red-400">155 (Unhealthy)</span><br>Pollutant: PM2.5<br>Confidence: 91%')
+                    .openPopup();
+            }
+        }
+
+        // --- Navigation Control ---
+        function navigateTo(targetView, targetLink) {
+            // Update link active state
+            document.querySelectorAll('.sidebar-nav a').forEach(a => {
+                a.classList.remove('bg-indigo-700/50', 'text-white');
+                a.classList.add('text-gray-400');
+            });
+            targetLink.classList.add('bg-indigo-700/50', 'text-white');
+            targetLink.classList.remove('text-gray-400');
+
+            // Update view visibility
+            document.querySelectorAll('.page').forEach(page => {
+                page.classList.add('hidden');
+                page.classList.remove('active');
+            });
+            targetView.classList.remove('hidden');
+            targetView.classList.add('active');
+
+            // If navigating to the Map, ensure it is rendered correctly
+            if (targetView === mapView) {
+                initMap();
+                setTimeout(() => { map.invalidateSize(); }, 0); 
+            }
+            
+            // Hide sidebar on mobile after navigation
+            if (window.innerWidth <= 768) {
+                 toggleSidebar();
+            }
+        }
+
+        // --- Placeholder for Dashboard Interaction ---
+        function checkForecast() {
+            const city = document.getElementById('city-input').value.trim();
+            const output = document.getElementById('forecast-output');
+            
+            if (city) {
+                // Simulated AI response for demonstration
+                const aqi = Math.floor(Math.random() * 200) + 20;
+                let status = 'Moderate';
+                let color = 'text-yellow-400';
+
+                if (aqi < 50) {
+                    status = 'GOOD';
+                    color = 'text-green-400';
+                } else if (aqi > 150) {
+                    status = 'UNHEALTHY';
+                    color = 'text-red-400';
+                }
+                
+                output.innerHTML = `
+                    <p class="text-lg font-semibold mb-2">Forecast for <span class="text-indigo-400">${city}</span> (48h Avg):</p>
+                    <p class="text-3xl font-extrabold ${color}">AQI: ${aqi} (${status})</p>
+                    <p class="text-sm mt-2 text-gray-500">Predicted by CNN-LSTM Model. Confidence Score: 89.5%</p>
+                `;
+            } else {
+                output.innerHTML = '<p>Please enter a valid city or zip code.</p>';
+            }
+        }
+
+
+        // --- Event Listeners and Initialization ---
+
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initial map setup
+            initMap();
+            
+            // Mobile initial state: hide sidebar
+            if (window.innerWidth <= 768) {
+                sidebar.style.transform = 'translateX(-100%)';
+                showSidebarBtn.style.display = 'block';
+            } else {
+                showSidebarBtn.style.display = 'none';
+                sidebar.classList.add('is-open'); // Keep open on desktop
+            }
+
+            // Sidebar toggle buttons
+            hamburgerIcon.addEventListener('click', toggleSidebar);
+            showSidebarBtn.addEventListener('click', () => {
+                sidebar.classList.add('is-open');
+                toggleSidebar();
+            });
+
+            // Navigation event listeners
+            mapLink.addEventListener('click', (e) => {
+                e.preventDefault();
+                navigateTo(mapView, mapLink);
+            });
+
+            dashboardLink.addEventListener('click', (e) => {
+                e.preventDefault();
+                navigateTo(dashboardView, dashboardLink);
+            });
+            
+            // Ensure the initial active link styling is correct
+            mapLink.classList.remove('text-gray-400');
+            mapLink.classList.add('bg-indigo-700/50', 'text-white');
+        });
+    </script>
+</body>
+</html>

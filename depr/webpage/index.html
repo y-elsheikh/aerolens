@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>North America Map & Dashboard</title>
+    <!-- Google Fonts - Example: Montserrat. You can choose another if you prefer. -->
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;600&display=swap" rel="stylesheet">
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css"/>
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="sidebar">
+        <div class="sidebar-header">
+            <button id="hamburger-icon" class="hamburger-menu">
+                &#9776; <!-- Hamburger icon -->
+            </button>
+            <h2>Navigation</h2> <!-- Changed "Menu" to "Navigation" -->
+        </div>
+        <ul class="sidebar-nav">
+            <li><a href="#" id="map-link" class="active">Map View</a></li>
+            <li><a href="#" id="dashboard-link">Dashboard</a></li>
+        </ul>
+    </div>
+
+    <div id="content">
+        <div id="map-view" class="page active">
+            <div id="mapid"></div>
+        </div>
+        <div id="dashboard-view" class="page">
+            <h1>Dashboard Overview</h1> <!-- Changed "Dashboard Page" -->
+            <p>Welcome to your custom dashboard. This area is ready for your data visualizations and insights.</p>
+        </div>
+    </div>
+
+    <!-- Leaflet JavaScript -->
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+    <!-- Custom JavaScript -->
+    <script src="script.js"></script>
+</body>
+</html>

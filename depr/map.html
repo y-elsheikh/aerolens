@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TEMPO AQI Forecast</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css">
+  <style>
+    #map { height: 100%; }
+  </style>
+</head>
+<body class="bg-gray-900 text-white flex flex-col h-screen">
+
+  <!-- Header -->
+  <header class="bg-gray-800 p-4 flex justify-between items-center shadow-lg">
+    <h1 class="text-xl font-bold">🌎 TEMPO Air Quality</h1>
+    <div>
+      <span id="status" class="bg-green-500 px-3 py-1 rounded-full text-sm">
+        Good AQI
+      </span>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="flex flex-1">
+    <!-- Map Panel -->
+    <div class="flex-1">
+      <div id="map"></div>
+    </div>
+
+    <!-- Info / Forecast Panel -->
+    <aside class="w-96 bg-gray-800 p-4 flex flex-col space-y-4">
+      <h2 class="text-lg font-bold">Station Details</h2>
+      <div id="station-info" class="space-y-2">
+        <p><strong>Location:</strong> Select a station on the map</p>
+      </div>
+
+      <!-- Chart Placeholder -->
+      <canvas id="chart" class="bg-gray-700 rounded-lg p-2"></canvas>
+
+      <!-- Pollutant Toggle -->
+      <div class="space-x-2">
+        <button class="bg-blue-500 px-3 py-1 rounded-lg" onclick="setPollutant('NO2')">NO₂</button>
+        <button class="bg-yellow-500 px-3 py-1 rounded-lg" onclick="setPollutant('O3')">O₃</button>
+        <button class="bg-red-500 px-3 py-1 rounded-lg" onclick="setPollutant('PM25')">PM₂.₅</button>
+      </div>
+
+      <!-- Alert Subscription -->
+      <button class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg mt-auto"
+              onclick="subscribeAlerts()">
+        🔔 Enable Alerts
+      </button>
+    </aside>
+  </main>
+
+  <!-- Libraries -->
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <script>
+    // Initialize Map
+    const map = L.map('map').setView([39, -95], 4);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+
+    // Example station data
+    const stations = [
+      { id: 1, name: "Chicago", lat: 41.88, lon: -87.62, aqi: 78 },
+      { id: 2, name: "Dallas", lat: 32.77, lon: -96.79, aqi: 120 }
+    ];
+
+    stations.forEach(st => {
+      const color = st.aqi > 100 ? "red" : "green";
+      L.circleMarker([st.lat, st.lon], { color, radius: 6 })
+        .addTo(map)
+        .bindPopup(`<b>${st.name}</b><br>AQI: ${st.aqi}`)
+        .on("click", () => updateStationInfo(st));
+    });
+
+    // Update info panel
+    function updateStationInfo(station) {
+      document.getElementById("station-info").innerHTML = `
+        <p><strong>Location:</strong> ${station.name}</p>
+        <p><strong>AQI:</strong> ${station.aqi}</p>
+      `;
+      updateChart();
+    }
+
+    // Simple example chart
+    function updateChart() {
+      const ctx = document.getElementById('chart').getContext('2d');
+      new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: ["10AM","11AM","12PM","1PM","2PM"],
+          datasets: [{
+            label: "Forecast AQI",
+            data: [50, 60, 75, 85, 95],
+            borderColor: "orange"
+          }]
+        }
+      });
+    }
+
+    function setPollutant(p) {
+      alert("Switching to " + p + " layer!");
+    }
+
+    function subscribeAlerts() {
+      alert("Subscribed to AQ alerts!");
+    }
+  </script>
+</body>
+</html>

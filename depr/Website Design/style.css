@@ -1,0 +1,69 @@
+body {
+    background-image: url('background.gif'); /* Replace with the actual path to your GIF */
+    background-size: cover; /* Ensures the GIF covers the entire element */
+    background-position: -10px center; /* Centers the GIF */
+    background-repeat: no-repeat; /* Prevents the GIF from repeating */
+    height: 100vh; /* Ensures the body takes up the full viewport height */
+    margin: 0; /* Removes default body margin */
+    padding: 0; /* Removes default body padding */
+}
+
+#bacRec {
+    width: 100%;
+    height: 100%;
+    background-color: white;
+    opacity: 0.5;
+    z-index: -1;
+    position: absolute;
+}
+
+#homeTittle {
+  text-align: center;
+  font-family: Impact;
+  font-size: 250px;
+  font-weight: 900;
+  font-stretch: condensed;
+  position: relative;
+  top: 50px;
+}
+
+.main {
+  position: relative;
+}
+
+
+body{
+  counter-reset:section;
+  text-align:center;
+}
+
+.container{
+  position:relative;
+  top:100px;
+}
+
+input{
+  border: 2px solid black;
+  outline:none;
+  display:inline-block;
+  height:60px;
+  vertical-align:middle;
+  position:relative;
+  bottom:14px;
+  border-radius:35px;
+  width:35%;
+  box-sizing:border-box;
+  padding:0 20px; 
+  font-size: 20px;
+}
+
+input[type="button"]{ 
+    border-radius:25px;
+    height:45px;
+  background:green;
+  color:#fff;
+  position:relative;
+  top:20px; 
+  width:150px;
+  cursor:pointer;
+}
