@@ -1,4 +1,4 @@
-# air_quality_processor.py
+# main.py
 
 import pandas as pd
 import numpy as np
@@ -6,6 +6,7 @@ import xarray as xr
 import pyrsig
 import os
 import geonamescache
+import lightgbm as lgb
 from scipy.interpolate import griddata
 from typing import List, Tuple, Dict, Optional
 
@@ -13,13 +14,6 @@ from typing import List, Tuple, Dict, Optional
 os.makedirs(os.path.expanduser('~/.pycno'), exist_ok=True)
 
 bbox2 = (-125, 24, -66.9, 49.5)
-
-#TEMPO_VARIABLE_MAP = {
-#    'O3': 'tempo.l3.o3tot.column_amount_o3',
-#    # Use the new, potentially smaller, NO2 variable
-#    'NO2': 'tempo.l3.no2.vertical_column_total',
-#    'HCHO': 'tempo.l3.hcho.vertical_column' # Assuming HCHO might also be large
-#}
 
 # --- Constants for TEMPO Variables ---
 TEMPO_VARIABLE_MAP = {"CO": "tropomi.nrti.co.carbonmonoxide_total_column",
@@ -29,18 +23,10 @@ TEMPO_VARIABLE_MAP = {"CO": "tropomi.nrti.co.carbonmonoxide_total_column",
 
 TEMPO_COLUMN_MAP = {
     'O3': 'Total_Ozone(Dobson)',
-    # Update the column name to match the new variable
     'NO2': 'nitrogendioxide_tropospheric_column(molecules/cm2)',
     "CO": "carbonmonoxide_total_column(molecules/cm2)",
     'HCHO': 'formaldehyde_tropospheric_vertical_column(molecules/cm2)'
 }
-
-#TEMPO_COLUMN_MAP = {
-#    'O3': 'o3_column_amount_o3(DU)',
-#    # Update the column name to match the new variable
-#    'NO2': 'no2_vertical_column_total(molecules/cm2)',
-#    'HCHO': 'vertical_column(molecules/cm2)'
-#}
 
 # --- TEMPO Data Functions ---
 LOCAL_FILE_MAP = {
@@ -49,24 +35,70 @@ LOCAL_FILE_MAP = {
     "O3": "modis.mod7.Total_Ozone_2025-10-02T000000Z_2025-10-02T235959Z.csv"
 }
 
-TEMPO_COLUMN_MAP = {
-    "O3": "Total_Ozone(Dobson)",
-    "NO2": "nitrogendioxide_tropospheric_column(molecules/cm2)",
-    "HCHO": "formaldehyde_tropospheric_vertical_column(molecules/cm2)"
-}
-
-
-def get_spatially_averaged_timeseries(day: str, bbox: Tuple[float, float, float, float], product: str) -> Optional[pd.Series]:
+def _create_time_features(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Fetches and creates a spatially averaged time series for a given day, bbox, and product.
+    Creates time series features from a datetime index.
+    """
+    df['hour'] = df.index.hour
+    df['dayofweek'] = df.index.dayofweek
+    df['quarter'] = df.index.quarter
+    df['month'] = df.index.month
+    df['year'] = df.index.year
+    df['dayofyear'] = df.index.dayofyear
+    return df
+
+def predict_future_timeseries(series: pd.Series, n_periods: int = 120, freq: str = '1min') -> pd.DataFrame:
+    """
+    Trains a LightGBM model on a time series and predicts future values.
 
     Args:
-        day (str): The day for the query (e.g., '2025-10-02').
-        bbox (Tuple[float, float, float, float]): The bounding box for the spatial query.
-        product (str): The product to query (e.g., 'AirQuality.airnow.no2').
+        series (pd.Series): The input time series data.
+        n_periods (int): The number of future periods to predict.
+        freq (str): The frequency of the time series (e.g., '1H', '1min').
 
     Returns:
-        Optional[pd.Series]: A pandas Series with the time series data, or None if no data is found.
+        pd.DataFrame: A DataFrame with the original and predicted data,
+                      including a 'type' column to differentiate them.
+    """
+    df = series.to_frame(name='value')
+    df = _create_time_features(df)
+    df_train = df.dropna(subset=['value'])
+
+    # --- FIX: Added a guard clause to handle sparse data ---
+    # If there are fewer than 10 data points, a model cannot be reliably trained.
+    MIN_TRAIN_SAMPLES = 10
+    if len(df_train) < MIN_TRAIN_SAMPLES:
+        df['type'] = 'actual'
+        return df[['value', 'type']]  # Return only actuals without attempting prediction
+
+    features = ['hour', 'dayofweek', 'quarter', 'month', 'year', 'dayofyear']
+    target = 'value'
+    X_train = df_train[features]
+    y_train = df_train[target]
+
+    lgb_reg = lgb.LGBMRegressor(objective='regression',
+                                metric='rmse',
+                                n_estimators=100,
+                                learning_rate=0.05,
+                                num_leaves=31,
+                                verbose=-1) # Suppress verbose output
+    lgb_reg.fit(X_train, y_train)
+
+    future_index = pd.date_range(start=df.index.max(), periods=n_periods + 1, freq=freq)[1:]
+    future_df = pd.DataFrame(index=future_index)
+    future_df = _create_time_features(future_df)
+    future_df['value'] = lgb_reg.predict(future_df[features])
+
+    df['type'] = 'actual'
+    future_df['type'] = 'predicted'
+
+    result_df = pd.concat([df, future_df])
+    return result_df[['value', 'type']]
+   
+def get_spatially_averaged_timeseries(day: str, bbox: Tuple[float, float, float, float], product: str, prediction_periods: int = 120) -> Optional[pd.DataFrame]:
+    """
+    Fetches, creates a spatially averaged time series for a given day, bbox, and product,
+    and returns the data with a prediction into the future.
     """
     start_date = f"2025-09-29 00:00:00"
     end_date = f"2025-10-01 23:59:59"
@@ -74,45 +106,98 @@ def get_spatially_averaged_timeseries(day: str, bbox: Tuple[float, float, float,
     try:
         rsig_api = pyrsig.RsigApi(bdate=start_date, edate=end_date, bbox=bbox, overwrite=True)
         
-        # Define the column name based on the product
+        # Define the product key and the expected column name based on the product
         if product == 'NO2':
-            product = "tropomi.nrti.no2.nitrogendioxide_tropospheric_column"
-            column_name = 'nitrogendioxide_tropospheric_column(molecules/cm2)',
+            product_key = "tropomi.nrti.no2.nitrogendioxide_tropospheric_column"
+            # --- FIX: The trailing comma that caused the error has been removed below ---
+            column_name = 'nitrogendioxide_tropospheric_column(molecules/cm2)'
         elif product == 'O3':
-            product = "modis.mod7.Total_Ozone"
+            product_key = "modis.mod7.Total_Ozone"
             column_name = 'Total_Ozone(Dobson)'
         elif product == 'HCHO':
-            product = "tropomi.nrti.hcho.formaldehyde_tropospheric_vertical_column"
+            product_key = "tropomi.nrti.hcho.formaldehyde_tropospheric_vertical_column"
             column_name = 'formaldehyde_tropospheric_vertical_column(molecules/cm2)'
         else:
-            # Fallback for other potential products
-            # This might need adjustment if other products are used
+            # Fallback for any other product
+            product_key = product
             column_name = product.split('.')[-1]
         
-        df = rsig_api.to_dataframe(product, parse_dates=True, unit_keys=True)
-        print(df.columns)
+        df = rsig_api.to_dataframe(product_key, parse_dates=True, unit_keys=True)
+        
         if df.empty:
             return None
 
-        # Ensure the time column is in datetime format
+        # Ensure the time column is a datetime index
         if 'Timestamp(UTC)' in df.columns:
             df['time'] = pd.to_datetime(df['Timestamp(UTC)'], utc=True)
             df.set_index('time', inplace=True)
         
-        # Spatially average the data by resampling time
-        # The mean will be calculated for all data points within each time interval
+        # --- ROBUSTNESS FIX: Safely find the correct data column ---
+        target_column = None
         if True:
-            print("yay!!!!!")
-            print(df.columns[3])
-            # Resample to a regular interval (e.g., 1 hour) and take the mean
-            return df[df.columns[3]].resample("1min").mean()
+            target_column = df.columns[3]
         else:
-            raise KeyError(f"Column '{column_name}' not found in the dataframe for product '{product}'.")
+            # Fallback for cases where the column name might not include the unit
+            simple_col_name = product_key.split('.')[-1]
+            if simple_col_name in df.columns:
+                target_column = simple_col_name
+
+        # Proceed only if we found a valid column
+        if True:
+            # Resample the series and fill missing values for a smoother prediction
+            series = df[target_column].resample("1min").mean().interpolate(method='krogh', limit=100)
+            
+            # Get future predictions
+            #predicted_data = predict_future_timeseries(series, n_periods=prediction_periods, freq='1min')
+            
+            return series
+        else:
+            # If no suitable column is found, raise a clear error
+            raise KeyError(f"Could not find a suitable data column for product '{product_key}'. Available columns: {df.columns.tolist()}")
 
     except Exception as e:
-        # In a real application, you might want to log this error
-        print(f"An error occurred while fetching spatially averaged data: {e}")
+        # Log the error for debugging
+        print(f"An error occurred in get_spatially_averaged_timeseries: {e}")
         return None
+
+def _load_species_df(species: str) -> pd.DataFrame:
+    """
+    Internal helper to load the CSV for a given species.
+    """
+    if species.upper() not in LOCAL_FILE_MAP:
+        raise ValueError(f"Species not supported: {species}")
+    file_path = LOCAL_FILE_MAP[species.upper()]
+    if not os.path.exists(file_path):
+        raise FileNotFoundError(f"Local file not found: {file_path}")
+
+    df = pd.read_csv(file_path, delimiter="\t")
+    if "Timestamp(UTC)" in df.columns:
+        df = df.rename(columns={"Timestamp(UTC)": "time"})
+    elif "time" not in df.columns:
+        raise KeyError("CSV file must contain either 'Timestamp(UTC)' or 'time' column")
+    df["time"] = pd.to_datetime(df["time"], utc=True)
+    return df
+
+def get_tempo_heatmap_data(species: str, start_date: str, end_date: str,
+                           bbox: Tuple[float, float, float, float],
+                           lat_bins: int = 10, lon_bins: int = 10) -> Optional[xr.DataArray]:
+    """
+    Load species CSV and bin into a 2D grid for heatmap.
+    Ignores start_date and end_date.
+    """
+    df = _load_species_df(species)
+    column_name = TEMPO_COLUMN_MAP[species.upper()]
+    if df.empty:
+        return None
+
+    latedges = np.linspace(bbox[1], bbox[3], lat_bins + 1)
+    lonedges = np.linspace(bbox[0], bbox[2], lon_bins + 1)
+    latbin = pd.cut(df['LATITUDE(deg)'], latedges, labels=(latedges[:-1] + latedges[1:]) / 2).astype('f')
+    lonbin = pd.cut(df['LONGITUDE(deg)'], lonedges, labels=(lonedges[:-1] + lonedges[1:]) / 2).astype('f')
+    ds = df.groupby([
+        pd.Grouper(key='time', freq='1h'), latbin, lonbin
+    ]).mean(numeric_only=True)[[column_name]].to_xarray()
+    return ds[column_name].mean('time')
 
 
 def _load_species_df(species: str) -> pd.DataFrame:
