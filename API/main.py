@@ -1,4 +1,4 @@
-#main.py
+# main.py
 
 from fastapi import FastAPI, HTTPException, Query
 # CRITICAL: Import CORS Middleware
@@ -31,14 +31,12 @@ app = FastAPI(
 )
 
 # --- CRITICAL: Add CORS Middleware ---
-# This must be added immediately after app initialization.
-# It fixes the "405 Method Not Allowed" on OPTIONS requests.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allows all origins (like your local html file)
+    allow_origins=["*"],
     allow_credentials=True,
-    allow_methods=["*"],  # Allows all methods (POST, GET, OPTIONS, etc.)
-    allow_headers=["*"],  # Allows all headers
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # --- Pydantic Models for API ---
@@ -58,9 +56,11 @@ class InterpolatedHeatmapResponse(BaseModel):
     values: List[List[Optional[float]]]
     unit: str
 
+# --- CHANGE 1: ADD 'type' TO THE RESPONSE MODEL ---
 class AveragedDataPoint(BaseModel):
     time: datetime
     value: float
+    type: str # 'actual' or 'predicted'
 
 class CorrelationResult(BaseModel):
     pearson: Optional[float]
@@ -90,26 +90,27 @@ async def get_spatially_averaged_timeseries_data(
     product: str = Query(..., description="The data product, e.g., 'AirQuality.airnow.ozone'")
 ):
     """
-    Generates a spatially averaged time series for a given day, bounding box, and product.
-    This is ideal for plotting time series graphs.
+    Generates a spatially averaged time series for a given day, bounding box, and product,
+    including future predictions.
     """
     try:
-        timeseries = get_spatially_averaged_timeseries(
+        timeseries_df = get_spatially_averaged_timeseries( # The function now returns a DataFrame
             day=day,
             bbox=bbox.to_tuple(),
             product=product
         )
 
-        if timeseries is None or timeseries.empty:
+        if timeseries_df is None or timeseries_df.empty:
             raise HTTPException(
                 status_code=404,
                 detail=f"No time series data found for product '{product}' on {day} in the specified bounding box."
             )
 
-        # Format the response into a list of data points, excluding any NaN values
+        # --- CHANGE 2: UPDATE RESPONSE FORMATTING FOR THE DATAFRAME ---
+        # The function now returns a DataFrame with 'value' and 'type' columns.
         response_data = [
-            AveragedDataPoint(time=index.to_pydatetime(), value=float(value))
-            for index, value in timeseries.items() if pd.notna(value)
+            AveragedDataPoint(time=index.to_pydatetime(), value=float(row['value']), type=row['type'])
+            for index, row in timeseries_df.iterrows() if pd.notna(row['value'])
         ]
         
         return response_data
@@ -121,7 +122,7 @@ async def get_spatially_averaged_timeseries_data(
         print(f"Server error in /spatially_averaged_timeseries: {e}")
         raise HTTPException(status_code=500, detail=f"An internal error occurred: {e}")
 
-
+# ... (rest of main.py is unchanged) ...
 @app.post("/heatmap_data", response_model=InterpolatedHeatmapResponse)
 async def get_interpolated_heatmap_data(
     bbox: BoundingBox,
@@ -167,7 +168,7 @@ async def get_interpolated_heatmap_data(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@app.post("/averaged_data", response_model=List[AveragedDataPoint])
+@app.post("/averaged_data") # NOTE: removed response model as it's not used by the frontend
 async def get_time_averaged_data(
     bbox: BoundingBox,
     species: str = Query(..., description="Species to fetch (O3, NO2, HCHO)"),
@@ -187,8 +188,9 @@ async def get_time_averaged_data(
         if averaged_series is None or averaged_series.empty:
             raise HTTPException(status_code=404, detail="No averaged data found.")
 
+        # This response is not used, but kept for completeness
         return [
-            AveragedDataPoint(time=idx.to_pydatetime(), value=float(val))
+            {"time": idx.to_pydatetime(), "value": float(val)}
             for idx, val in averaged_series.items() if not pd.isna(val)
         ]
     except Exception as e:

@@ -95,6 +95,7 @@ def predict_future_timeseries(series: pd.Series, n_periods: int = 120, freq: str
     result_df = pd.concat([df, future_df])
     return result_df[['value', 'type']]
    
+    
 def get_spatially_averaged_timeseries(day: str, bbox: Tuple[float, float, float, float], product: str, prediction_periods: int = 120) -> Optional[pd.DataFrame]:
     """
     Fetches, creates a spatially averaged time series for a given day, bbox, and product,
@@ -109,7 +110,6 @@ def get_spatially_averaged_timeseries(day: str, bbox: Tuple[float, float, float,
         # Define the product key and the expected column name based on the product
         if product == 'NO2':
             product_key = "tropomi.nrti.no2.nitrogendioxide_tropospheric_column"
-            # --- FIX: The trailing comma that caused the error has been removed below ---
             column_name = 'nitrogendioxide_tropospheric_column(molecules/cm2)'
         elif product == 'O3':
             product_key = "modis.mod7.Total_Ozone"
@@ -145,12 +145,13 @@ def get_spatially_averaged_timeseries(day: str, bbox: Tuple[float, float, float,
         # Proceed only if we found a valid column
         if True:
             # Resample the series and fill missing values for a smoother prediction
-            series = df[target_column].resample("1min").mean().interpolate(method='krogh', limit=100)
+            series = df[target_column].resample("1min").mean().interpolate(method='krogh', limit=10000)
             
+            # --- CHANGE: UNCOMMENT AND RETURN THE PREDICTED DATA ---
             # Get future predictions
-            #predicted_data = predict_future_timeseries(series, n_periods=prediction_periods, freq='1min')
+            predicted_data = predict_future_timeseries(series, n_periods=prediction_periods, freq='1min')
             
-            return series
+            return predicted_data # Return the DataFrame with 'actual' and 'predicted' types
         else:
             # If no suitable column is found, raise a clear error
             raise KeyError(f"Could not find a suitable data column for product '{product_key}'. Available columns: {df.columns.tolist()}")
@@ -159,6 +160,7 @@ def get_spatially_averaged_timeseries(day: str, bbox: Tuple[float, float, float,
         # Log the error for debugging
         print(f"An error occurred in get_spatially_averaged_timeseries: {e}")
         return None
+
 
 def _load_species_df(species: str) -> pd.DataFrame:
     """
