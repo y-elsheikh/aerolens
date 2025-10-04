@@ -1,0 +1,13 @@
+uvicorn[standard]
+fastapi
+pydantic
+numpy
+pandas
+xarray
+scipy
+pyproj
+geonamescache
+pyrsig
+netCDF4
+aiofiles
+lightgbm
