@@ -385,7 +385,7 @@
         const { lat, lng } = e.latlng;
         openTimeseriesModal(lat, lng);
 
-        const bbox_size = 0.5; // degrees
+        const bbox_size = 0.1; // degrees
         const bbox = {
             min_lon: lng - bbox_size / 2,
             min_lat: lat - bbox_size / 2,

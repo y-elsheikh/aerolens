@@ -40,7 +40,7 @@ LOCAL_FILE_MAP = {
 RESAMPLE_FREQ = '1H' # Resample to a realistic frequency (hourly)
 MIN_TRAIN_SAMPLES = 48 # Require at least 48 hours (2 days) of data to train
 
-def predict_future_timeseries(series: pd.Series, n_periods: int = 48, freq: str = '3H') -> pd.DataFrame:
+def predict_future_timeseries(series: pd.Series, n_periods: int = 24, freq: str = '3H') -> pd.DataFrame:
     """
     Trains a simple Linear Regression model on the time series and predicts future values.
     This model uses only the passage of time as a predictor.
@@ -93,7 +93,7 @@ def get_spatially_averaged_timeseries(day: str, bbox: Tuple[float, float, float,
     # Note: The 'day' argument seems unused in the original function's date range.
     # Using a fixed date range as per the original code.
     start_date = "2025-09-29 00:00:00"
-    end_date = "2025-10-01 23:59:59"
+    end_date = "2025-10-03 23:59:59"
 
     try:
         # This part for fetching data is assumed to be correct
@@ -134,7 +134,7 @@ def get_spatially_averaged_timeseries(day: str, bbox: Tuple[float, float, float,
         series = df[target_column].resample("3H").mean().interpolate(method='polynomial', order=2)
         
         # Get future predictions using the robust new function
-        predicted_data = predict_future_timeseries(series, n_periods=prediction_periods, freq="3H")
+        predicted_data = predict_future_timeseries(series, n_periods=24, freq="3H")
         
         return predicted_data
 
